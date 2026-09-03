@@ -1,0 +1,16 @@
+main
+**/*.o
+*.roff
+*.scd
+dist
+
+protocols/*.c
+protocols/*.h
+
+.nvim.lua
+compile_commands.json
+.cache
+
+.todo
+
+build
