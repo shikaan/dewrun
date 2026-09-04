@@ -1,7 +1,7 @@
 #include "ctx.h"
-#include "cairo.h"
 #include "log.h"
 #include "result.h"
+#include <cairo/cairo.h>
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>

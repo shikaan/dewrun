@@ -13,14 +13,14 @@ run apt install -y \
 run apt install -y \
   libwayland-dev \
   libcairo2-dev \
-  libfreetype-dev
+  libxkbcommon-dev
 
 entrypoint bash
 
 from base as tooling
 
 # development tools
-run apt install -y clangd
+run apt install -y clangd bear man
 
 workdir /src
 entrypoint bash

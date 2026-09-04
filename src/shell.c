@@ -4,22 +4,23 @@
 #include "result.h"
 #include "timer.h"
 #include <assert.h>
-#include <cursor-shape-v1.h>
 #include <errno.h>
 #include <limits.h>
 #include <poll.h>
+#include <protocols/wlr-layer-shell-unstable-v1.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
 #include <wayland-client.h>
-#include <wlr-layer-shell-unstable-v1.h>
-
-// stub for a symbol in the cursor-shape protocol we do not use
-const struct wl_interface zwp_tablet_tool_v2_interface;
+#include <xkbcommon/xkbcommon-keysyms.h>
+#include <xkbcommon/xkbcommon.h>
 
 static shl_shell_t shell = {0};
 
@@ -88,21 +89,22 @@ static struct wl_compositor *compositor = NULL;
 static struct wl_shm *shm = NULL;
 static struct zwlr_layer_shell_v1 *layer_shell = NULL;
 static struct wl_seat *seat = NULL;
-static struct wp_cursor_shape_manager_v1 *cursor_shape = NULL;
 
 static struct wl_keyboard *keyboard = NULL;
 static struct wl_pointer *pointer = NULL;
-static struct wp_cursor_shape_device_v1 *cursor_shape_device = NULL;
 
 static double pointer_x = 0;
 static double pointer_y = 0;
 static uint32_t pointer_serial = 0;
-static shl_cursor_t cursor = SHL_CURSOR_DEFAULT;
 
 static struct wl_surface *surface;
 static struct zwlr_layer_surface_v1 *layer_surface;
 static uint32_t surface_width = 0;
 static uint32_t surface_height = 0;
+
+static struct xkb_context *xkb_context = NULL;
+static struct xkb_keymap *xkb_keymap = NULL;
+static struct xkb_state *xkb_state = NULL;
 
 static const struct wl_registry_listener registry_listener = {
     .global = registry_global,
@@ -188,9 +190,6 @@ static void registry_global(void *data, struct wl_registry *registry,
         wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
   } else if (strcmp(interface, wl_seat_interface.name) == 0) {
     seat = wl_registry_bind(registry, name, &wl_seat_interface, 4);
-  } else if (strcmp(interface, wp_cursor_shape_manager_v1_interface.name) == 0) {
-    cursor_shape = wl_registry_bind(registry, name,
-                                    &wp_cursor_shape_manager_v1_interface, 1);
   }
 }
 
@@ -212,11 +211,6 @@ static void seat_capabilities(void *data, struct wl_seat *wl_seat,
   if ((capabilities & WL_SEAT_CAPABILITY_POINTER) && !pointer) {
     pointer = wl_seat_get_pointer(wl_seat);
     wl_pointer_add_listener(pointer, &pointer_listener, NULL);
-
-    if (cursor_shape) {
-      cursor_shape_device =
-          wp_cursor_shape_manager_v1_get_pointer(cursor_shape, pointer);
-    }
   }
 }
 
@@ -233,6 +227,25 @@ static void keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard,
   (void)fd;
   (void)format;
   (void)size;
+
+  if (xkb_keymap) return;
+
+  char *xkb_shm = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (xkb_shm == MAP_FAILED) {
+    log_error("cannot identify keyboard", NULL);
+    exit(1);
+  }
+
+  xkb_keymap = xkb_keymap_new_from_string(xkb_context, xkb_shm,
+                                          XKB_KEYMAP_FORMAT_TEXT_V1,
+                                          XKB_KEYMAP_COMPILE_NO_FLAGS);
+  munmap(xkb_shm, size);
+  close(fd);
+  xkb_state = xkb_state_new(xkb_keymap);
+  if (!xkb_state) {
+    log_error("cannot identify keyboard", NULL);
+    exit(1);
+  }
 }
 
 static void keyboard_enter(void *data, struct wl_keyboard *wl_keyboard,
@@ -261,36 +274,53 @@ static void keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
   (void)serial;
   (void)time;
 
-  assert((state == 1 || state == 0) && "unrecognized key state");
-  shl_kbd_event_t evt =
-      state == 1 ? SHL_KBD_EVENT_KEYDOWN : SHL_KBD_EVENT_KEYUP;
+  static char buf[8] = {0};
+  static int len = 0;
+  memset(buf, 0, sizeof(buf));
+  len = 0;
 
-  shl_key_t evt_key;
-  switch (key) {
-  case 58: // escape
+  assert((state == WL_KEYBOARD_KEY_STATE_PRESSED ||
+          state == WL_KEYBOARD_KEY_STATE_RELEASED) &&
+         "unrecognized key state");
+  shl_kbd_event_t evt = state == WL_KEYBOARD_KEY_STATE_PRESSED
+                            ? SHL_KBD_EVENT_KEYDOWN
+                            : SHL_KBD_EVENT_KEYUP;
+
+  shl_key_t evt_key = SHL_KEY_UNKNOWN;
+  xkb_keysym_t sym = xkb_state_key_get_one_sym(xkb_state, key + 8);
+  switch (sym) {
+  case XKB_KEY_Escape:
     evt_key = SHL_KEY_CANCEL;
     break;
-  case 108: // arrow up
+  case XKB_KEY_Up:
+  case XKB_KEY_KP_Up:
     evt_key = SHL_KEY_UP;
     break;
-  case 103: // arrow down
+  case XKB_KEY_Down:
+  case XKB_KEY_KP_Down:
     evt_key = SHL_KEY_DOWN;
     break;
-  case 105: // arrow left
+  case XKB_KEY_Left:
+  case XKB_KEY_KP_Left:
     evt_key = SHL_KEY_LEFT;
     break;
-  case 106: // arrow right
+  case XKB_KEY_Right:
+  case XKB_KEY_KP_Right:
     evt_key = SHL_KEY_RIGHT;
     break;
-  case 28: // enter
+  case XKB_KEY_Return:
+  case XKB_KEY_KP_Enter:
     evt_key = SHL_KEY_CONFIRM;
     break;
+  case XKB_KEY_BackSpace:
+    evt_key = SHL_KEY_BACKSPACE;
+    break;
   default:
-    evt_key = SHL_KEY_UNKNOWN;
-    log_debug("unknown keyboard key %u", key);
+    len = xkb_state_key_get_utf8(xkb_state, key + 8, buf, sizeof(buf));
   }
 
-  if (shell.callbacks.key(evt, evt_key)) {
+  assert(shell.callbacks.key && "key callback must be non-null");
+  if (shell.callbacks.key(evt, evt_key, buf, (size_t)len)) {
     shl_draw();
   }
 }
@@ -301,10 +331,8 @@ static void keyboard_modifiers(void *data, struct wl_keyboard *wl_keyboard,
   (void)data;
   (void)wl_keyboard;
   (void)serial;
-  (void)mods_depressed;
-  (void)mods_latched;
-  (void)mods_locked;
-  (void)group;
+  xkb_state_update_mask(xkb_state, mods_depressed, mods_latched, mods_locked, 0,
+                        0, group);
 }
 static void keyboard_repeat_info(void *data, struct wl_keyboard *wl_keyboard,
                                  int32_t rate, int32_t delay) {
@@ -323,7 +351,6 @@ static void pointer_enter(void *data, struct wl_pointer *wl_pointer,
   pointer_y = wl_fixed_to_double(surface_y);
 
   pointer_serial = serial;
-  shl_set_cursor(SHL_CURSOR_DEFAULT, true);
 }
 
 static void pointer_leave(void *data, struct wl_pointer *wl_pointer,
@@ -443,9 +470,15 @@ result_t shl_create(shl_callbacks_t cbs, shl_shell_t **shl) {
   wl_seat_add_listener(seat, &seat_listener, NULL);
   wl_display_roundtrip(display); // wait for input to be bound
 
+  xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+  if (!xkb_context) {
+    log_error("unable to create xkb context", NULL);
+    return ERR_SHL_XKB;
+  }
+
   surface = wl_compositor_create_surface(compositor);
   layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-      layer_shell, surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY, "dewsesh");
+      layer_shell, surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY, "dewtask");
 
   // anchoring to every edge with a zero size lets the compositor pick the
   // size, i.e. the surface fills all available space on its output
@@ -468,33 +501,15 @@ result_t shl_create(shl_callbacks_t cbs, shl_shell_t **shl) {
 }
 
 void shl_draw(void) {
+  assert(shell.callbacks.draw && "draw callback must be not-null");
   ctx_t *c = NULL;
   shell.callbacks.draw(surface_width, surface_height, &c);
   if (!c)
     return;
 
-  // FIXME: check+log draw errors via a ctx_status() call instead of
-  // leaking cairo into shell.c (also reconsider the "ctx" name)
-
   wl_surface_attach(surface, c->wl.buffer, 0, 0);
   wl_surface_damage_buffer(surface, 0, 0, (int)c->width, (int)c->height);
   wl_surface_commit(surface);
-}
-
-void shl_set_cursor(shl_cursor_t c, bool force) {
-  if (!cursor_shape_device || pointer_serial == 0)
-    return;
-
-  if (!force && c == cursor)
-    return;
-
-  uint32_t shape = c == SHL_CURSOR_POINTER
-                       ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_POINTER
-                       : WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT;
-  wp_cursor_shape_device_v1_set_shape(cursor_shape_device, pointer_serial,
-                                      shape);
-
-  cursor = c;
 }
 
 result_t shl_run(void) {

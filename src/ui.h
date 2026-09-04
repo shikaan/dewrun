@@ -21,7 +21,6 @@ typedef enum {
 typedef struct ui_font ui_font_t;
 
 result_t ui_font_family(const char *family, ui_font_t **font);
-result_t ui_font_embedded(ui_font_t **font);
 
 typedef struct {
   color_t color;

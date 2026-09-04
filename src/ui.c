@@ -4,8 +4,6 @@
 #include "cairo.h"
 #include "log.h"
 #include "result.h"
-#include <ft2build.h>
-#include FT_FREETYPE_H
 #include <stdbool.h>
 #include <stddef.h>
 

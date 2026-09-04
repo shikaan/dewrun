@@ -52,7 +52,7 @@ endif
 ##P STATIC      - 1 to link the dependencies statically (default: 0)
 STATIC ?= 0
 
-DEPS := wayland-client cairo freetype2
+DEPS := wayland-client cairo xkbcommon
 
 ifeq ($(STATIC),1)
     LDFLAGS += -static
@@ -60,8 +60,7 @@ ifeq ($(STATIC),1)
     # cairo advertises its Xlib and XCB backends in Libs.private. dewsesh never
     # calls them, and Alpine ships no libXau.a, so the link would fail on a
     # library the binary does not use.
-    X11_LIBS := -lX11 -lXext -lXrender -lXau -lXdmcp \
-	-lxcb -lxcb-render -lxcb-shm
+    X11_LIBS := -lX11 -lXext -lXrender -lXau -lXdmcp -lxcb -lxcb-render -lxcb-shm
     DEPS_LIBS := $(filter-out $(X11_LIBS),$(shell pkg-config --static --libs $(DEPS)))
 else
     DEPS_CFLAGS := $(shell pkg-config --cflags $(DEPS))
@@ -117,10 +116,10 @@ install:
 ### docs - generate the manpage from the scdoc template
 docs:
 	@if command -v scdoc > /dev/null 2>&1; then \
-		echo "Generating manpage dewsesh.1.roff..."; \
-		sed "s/##VERSION##/${VERSION}/g; s/##SHA##/${SHA}/g" dewsesh.1.scd.tpl > dewsesh.1.scd; \
-		scdoc < dewsesh.1.scd > dewsesh.1.roff; \
-		echo "Generating manpage dewsesh.1.roff... DONE"; \
+		echo "Generating manpage dewtask.1.roff..."; \
+		sed "s/##VERSION##/${VERSION}/g; s/##SHA##/${SHA}/g" dewtask.1.scd.tpl > dewtask.1.scd; \
+		scdoc < dewtask.1.scd > dewtask.1.roff; \
+		echo "Generating manpage dewtask.1.roff... DONE"; \
 	else \
 		echo "WARN: Unable to find scdoc. Skipping manpage generation."; \
 	fi
@@ -170,14 +169,14 @@ main.o: protocols/wlr-layer-shell-unstable-v1.h
 src/ui.o: src/ctx.o src/log.o
 src/ctx.o: src/log.o
 src/shell.o: src/log.o src/ctx.o src/timer.o \
-	protocols/wlr-layer-shell-unstable-v1.h protocols/cursor-shape-v1.h
+	protocols/wlr-layer-shell-unstable-v1.h
 src/config.o: src/log.o
 
 main: CFLAGS += $(DEPS_CFLAGS) \
-	-isystem protocols -DVERSION='"$(VERSION)"' -DSHA='"$(SHA)"'
+	-isystem . -DVERSION='"$(VERSION)"' -DSHA='"$(SHA)"'
 main: LDLIBS += $(DEPS_LIBS)
 main: main.o protocols/wlr-layer-shell-unstable-v1.o \
-	protocols/xdg-shell-protocol.o protocols/cursor-shape-v1.o src/log.o \
+	protocols/xdg-shell-protocol.o src/log.o \
 	src/ctx.o src/shell.o src/timer.o src/ui.o src/cli.o src/config.o
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 

@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 
-#define NAME "dewsesh"
+#define NAME "dewtask"
 
 typedef struct {
   bool debug;
