@@ -28,7 +28,7 @@ bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
   (void)len;
   log_debug("input.len = %u", input.len);
   if (evt == SHL_KBD_EVENT_KEYDOWN) {
-    if (len) {
+    if (key == SHL_KEY_BUFFER) {
       snprintf(input.buf + input.len, sizeof(input.buf), "%s", buf);
       input.len = min(input.len + len, sizeof(input.buf));
     }
@@ -65,10 +65,20 @@ void handle_draw(uint32_t w, uint32_t h, ctx_t **ctx) {
   ui_txt(opts, inputx + 16, inputy + inputh - 20, input.buf);
 }
 
+bool handle_pointer(shl_ptr_event_t evt, shl_ptr_btn_t btn, double x,
+                    double y) {
+  (void)evt;
+  (void)btn;
+  (void)x;
+  (void)y;
+  exit(1);
+  return false;
+}
+
 static shl_callbacks_t callbacks = {
     .draw = handle_draw,
     .key = handle_key,
-    .pointer = NULL,
+    .pointer = handle_pointer,
 };
 
 int main(int argc, char *const *argv) {

@@ -317,6 +317,9 @@ static void keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
     break;
   default:
     len = xkb_state_key_get_utf8(xkb_state, key + 8, buf, sizeof(buf));
+    if (len > 0) {
+      evt_key = SHL_KEY_BUFFER;
+    }
   }
 
   assert(shell.callbacks.key && "key callback must be non-null");

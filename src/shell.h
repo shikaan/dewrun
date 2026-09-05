@@ -14,6 +14,7 @@ typedef enum {
   SHL_KEY_CONFIRM,
   SHL_KEY_CANCEL,
   SHL_KEY_BACKSPACE,
+  SHL_KEY_BUFFER,
 } shl_key_t;
 
 typedef enum {
