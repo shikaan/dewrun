@@ -33,6 +33,9 @@ typedef struct {
 typedef struct {
   double width, height;
   double y_bearing;
+  double x_advance;
+  // font-wide metrics, positive distances from the baseline
+  double ascent, descent;
 } ui_txt_bounds_t;
 
 result_t ui_init(void);

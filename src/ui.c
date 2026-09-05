@@ -105,12 +105,19 @@ void ui_txt_init(ui_txt_t opts, const char *text, ui_txt_bounds_t *bounds) {
   cairo_set_font_size(cairo, opts.size);
   ui_set_source_color(opts.color);
 
-  cairo_text_extents_t ext;
-  cairo_text_extents(cairo, text, &ext);
+  cairo_text_extents_t txt_ext;
+  cairo_text_extents(cairo, text, &txt_ext);
 
-  bounds->height = ext.height;
-  bounds->width = ext.width;
-  bounds->y_bearing = ext.y_bearing;
+  bounds->height = txt_ext.height;
+  bounds->width = txt_ext.width;
+  bounds->y_bearing = txt_ext.y_bearing;
+  bounds->x_advance = txt_ext.x_advance;
+
+  cairo_font_extents_t font_ext;
+  cairo_font_extents(cairo, &font_ext);
+
+  bounds->ascent = font_ext.ascent;
+  bounds->descent = font_ext.descent;
 }
 
 void ui_txt_commit(ui_txt_t opts, double x, double y,

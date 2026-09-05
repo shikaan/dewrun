@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/////////////////////// Application state
 typedef struct {
   char buf[1024];
   size_t len;
@@ -60,13 +61,24 @@ void handle_draw(uint32_t w, uint32_t h, ctx_t **ctx) {
 
   ui_txt_t opts = {
       .font = text,
-      .size = config->font.size * 2,
+      .size = config->font.size * 1.75,
       .align = UI_TXT_ALIGN_LEFT,
       .color = 0xffffffff,
       .weight = UI_TXT_WEIGHT_NORMAL,
   };
-  // TODO: use rect instead of yolo numbers
-  ui_txt(opts, inputx + 16, inputy + inputh - 20, input.buf);
+
+  ui_txt_bounds_t bounds;
+  ui_txt_init(opts, input.buf, &bounds);
+
+  double txtx = inputx + config->font.size;
+  double txty = inputy + inputh / 2 + (bounds.ascent - bounds.descent) / 2;
+  ui_txt_commit(opts, txtx, txty, &bounds, input.buf);
+
+  double cursorx = txtx + bounds.x_advance + (double)config->font.size / 4;
+  double cursorh = bounds.ascent + bounds.descent;
+  double cursorw = 2;
+  double cursory = txty - bounds.ascent;
+  ui_rect(cursorx, cursory, cursorw, cursorh, 0xffffffff);
 }
 
 bool handle_pointer(shl_ptr_event_t evt, shl_ptr_btn_t btn, double x,
@@ -75,7 +87,6 @@ bool handle_pointer(shl_ptr_event_t evt, shl_ptr_btn_t btn, double x,
   (void)btn;
   (void)x;
   (void)y;
-  exit(1);
   return false;
 }
 
