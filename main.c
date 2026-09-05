@@ -28,7 +28,6 @@ bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
 #define min(a, b) (a < b ? a : b)
   (void)key;
   (void)len;
-  log_debug("input.len = %u", input.len);
   if (evt == SHL_KBD_EVENT_KEYDOWN) {
     if (key == SHL_KEY_BUFFER) {
       snprintf(input.buf + input.len, sizeof(input.buf), "%s", buf);
