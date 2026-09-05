@@ -22,7 +22,12 @@
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 
-static shl_shell_t shell = {0};
+typedef struct {
+  shl_kbd_event_t evt;
+  shl_key_t key;
+  char buf[8];
+  uint8_t len;
+} keyboard_key_payload_t;
 
 static void registry_global(void *data, struct wl_registry *registry,
                             uint32_t name, const char *interface,
@@ -84,6 +89,8 @@ static void pointer_axis_stop(void *data, struct wl_pointer *wl_pointer,
 static void pointer_axis_discrete(void *data, struct wl_pointer *wl_pointer,
                                   uint32_t axis, int32_t discrete);
 
+static shl_shell_t shell = {0};
+
 static struct wl_display *display = NULL;
 static struct wl_compositor *compositor = NULL;
 static struct wl_shm *shm = NULL;
@@ -93,18 +100,24 @@ static struct wl_seat *seat = NULL;
 static struct wl_keyboard *keyboard = NULL;
 static struct wl_pointer *pointer = NULL;
 
+static uint64_t keyboard_repeat_rate = 0;
+static uint64_t keyboard_repeat_delay = 0;
+
 static double pointer_x = 0;
 static double pointer_y = 0;
 static uint32_t pointer_serial = 0;
 
-static struct wl_surface *surface;
-static struct zwlr_layer_surface_v1 *layer_surface;
+static struct wl_surface *surface = NULL;
+static struct zwlr_layer_surface_v1 *layer_surface = NULL;
 static uint32_t surface_width = 0;
 static uint32_t surface_height = 0;
 
 static struct xkb_context *xkb_context = NULL;
 static struct xkb_keymap *xkb_keymap = NULL;
 static struct xkb_state *xkb_state = NULL;
+
+static tmr_timer_t *keyboard_key_repeat_timer = NULL;
+static keyboard_key_payload_t keyboard_key_payload = {0};
 
 static const struct wl_registry_listener registry_listener = {
     .global = registry_global,
@@ -228,7 +241,8 @@ static void keyboard_keymap(void *data, struct wl_keyboard *wl_keyboard,
   (void)format;
   (void)size;
 
-  if (xkb_keymap) return;
+  if (xkb_keymap)
+    return;
 
   char *xkb_shm = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
   if (xkb_shm == MAP_FAILED) {
@@ -264,6 +278,19 @@ static void keyboard_leave(void *data, struct wl_keyboard *wl_keyboard,
   (void)wl_keyboard;
   (void)wl_surface;
   (void)serial;
+  if (keyboard_key_repeat_timer) {
+    tmr_cancel(keyboard_key_repeat_timer);
+    keyboard_key_repeat_timer = NULL;
+  }
+}
+
+static bool keyboard_key_repeat(void *data) {
+  (void)data;
+  tmr_timeout(keyboard_repeat_rate, keyboard_key_repeat, data,
+              &keyboard_key_repeat_timer);
+  return shell.callbacks.key(keyboard_key_payload.evt, keyboard_key_payload.key,
+                             keyboard_key_payload.buf,
+                             keyboard_key_payload.len);
 }
 
 static void keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
@@ -274,59 +301,70 @@ static void keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
   (void)serial;
   (void)time;
 
-  static char buf[8] = {0};
-  static int len = 0;
-  memset(buf, 0, sizeof(buf));
-  len = 0;
+  keyboard_key_payload.key = SHL_KEY_UNKNOWN;
+  keyboard_key_payload.evt = state == WL_KEYBOARD_KEY_STATE_PRESSED
+                                 ? SHL_KBD_EVENT_KEYDOWN
+                                 : SHL_KBD_EVENT_KEYUP;
+  memset(keyboard_key_payload.buf, 0, sizeof(keyboard_key_payload.buf));
+  keyboard_key_payload.len = 0;
 
-  assert((state == WL_KEYBOARD_KEY_STATE_PRESSED ||
-          state == WL_KEYBOARD_KEY_STATE_RELEASED) &&
-         "unrecognized key state");
-  shl_kbd_event_t evt = state == WL_KEYBOARD_KEY_STATE_PRESSED
-                            ? SHL_KBD_EVENT_KEYDOWN
-                            : SHL_KBD_EVENT_KEYUP;
-
-  shl_key_t evt_key = SHL_KEY_UNKNOWN;
   xkb_keysym_t sym = xkb_state_key_get_one_sym(xkb_state, key + 8);
   switch (sym) {
   case XKB_KEY_Escape:
-    evt_key = SHL_KEY_CANCEL;
+    keyboard_key_payload.key = SHL_KEY_CANCEL;
     break;
   case XKB_KEY_Up:
   case XKB_KEY_KP_Up:
-    evt_key = SHL_KEY_UP;
+    keyboard_key_payload.key = SHL_KEY_UP;
     break;
   case XKB_KEY_Down:
   case XKB_KEY_KP_Down:
-    evt_key = SHL_KEY_DOWN;
+    keyboard_key_payload.key = SHL_KEY_DOWN;
     break;
   case XKB_KEY_Left:
   case XKB_KEY_KP_Left:
-    evt_key = SHL_KEY_LEFT;
+    keyboard_key_payload.key = SHL_KEY_LEFT;
     break;
   case XKB_KEY_Right:
   case XKB_KEY_KP_Right:
-    evt_key = SHL_KEY_RIGHT;
+    keyboard_key_payload.key = SHL_KEY_RIGHT;
     break;
   case XKB_KEY_Return:
   case XKB_KEY_KP_Enter:
-    evt_key = SHL_KEY_CONFIRM;
+    keyboard_key_payload.key = SHL_KEY_CONFIRM;
     break;
   case XKB_KEY_BackSpace:
-    evt_key = SHL_KEY_BACKSPACE;
+    keyboard_key_payload.key = SHL_KEY_BACKSPACE;
     break;
-  default:
-    len = xkb_state_key_get_utf8(xkb_state, key + 8, buf, sizeof(buf));
+  default: {
+    int len =
+        xkb_state_key_get_utf8(xkb_state, key + 8, keyboard_key_payload.buf,
+                               sizeof(keyboard_key_payload.buf));
     if (len > 0) {
-      evt_key = SHL_KEY_BUFFER;
+      keyboard_key_payload.len = (uint8_t)len;
+      keyboard_key_payload.key = SHL_KEY_BUFFER;
     }
+  }
   }
 
   assert(shell.callbacks.key && "key callback must be non-null");
-  if (shell.callbacks.key(evt, evt_key, buf, (size_t)len)) {
+  if (shell.callbacks.key(keyboard_key_payload.evt, keyboard_key_payload.key,
+                          keyboard_key_payload.buf, keyboard_key_payload.len)) {
     shl_draw();
   }
+
+  if (keyboard_key_repeat_timer) {
+    tmr_cancel(keyboard_key_repeat_timer);
+    keyboard_key_repeat_timer = NULL;
+  }
+
+  if (keyboard_key_payload.evt == SHL_KBD_EVENT_KEYDOWN &&
+      keyboard_repeat_delay > 0 && keyboard_repeat_rate > 0) {
+    tmr_timeout(keyboard_repeat_delay, keyboard_key_repeat, NULL,
+                &keyboard_key_repeat_timer);
+  }
 }
+
 static void keyboard_modifiers(void *data, struct wl_keyboard *wl_keyboard,
                                uint32_t serial, uint32_t mods_depressed,
                                uint32_t mods_latched, uint32_t mods_locked,
@@ -341,7 +379,8 @@ static void keyboard_repeat_info(void *data, struct wl_keyboard *wl_keyboard,
                                  int32_t rate, int32_t delay) {
   (void)data;
   (void)wl_keyboard;
-  log_debug("keyboard repeat info event: rate=%d delay=%d", rate, delay);
+  keyboard_repeat_delay = (uint64_t)delay;
+  keyboard_repeat_rate = (uint64_t)rate;
 }
 
 static void pointer_enter(void *data, struct wl_pointer *wl_pointer,
@@ -513,6 +552,7 @@ void shl_draw(void) {
   wl_surface_attach(surface, c->wl.buffer, 0, 0);
   wl_surface_damage_buffer(surface, 0, 0, (int)c->width, (int)c->height);
   wl_surface_commit(surface);
+  c->busy = true;
 }
 
 result_t shl_run(void) {
