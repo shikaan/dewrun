@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 typedef struct {
   char buf[1024];
@@ -35,6 +36,9 @@ bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
     if (key == SHL_KEY_BACKSPACE) {
       input.len = input.len == 0 ? 0 : input.len - 1;
       input.buf[input.len] = 0;
+    }
+    if (key == SHL_KEY_CANCEL) {
+      exit(0);
     }
   }
   return true;
