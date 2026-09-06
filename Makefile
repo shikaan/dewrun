@@ -177,6 +177,6 @@ main: CFLAGS += $(DEPS_CFLAGS) \
 main: LDLIBS += $(DEPS_LIBS)
 main: main.o protocols/wlr-layer-shell-unstable-v1.o \
 	protocols/xdg-shell-protocol.o src/log.o src/ctx.o src/shell.o src/timer.o \
-	src/ui.o src/cli.o src/config.o src/fuzzy.o src/run.o
+	src/ui.o src/cli.o src/config.o src/fuzzy.o src/run.o src/hashset.o
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 

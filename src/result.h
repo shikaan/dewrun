@@ -31,5 +31,8 @@ typedef enum {
   ERR_RUN,
   ERR_RUN_LIST,
 
+  ERR_SET,
+  ERR_SET_NOT_FOUND,
+
   RESULTS
 } result_t;
