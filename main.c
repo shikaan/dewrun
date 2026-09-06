@@ -94,6 +94,8 @@ void handle_draw(uint32_t w, uint32_t h, ctx_t **ctx) {
     }
   }
 
+  opts.color = 0xffffffff;
+  ui_txt_init(opts, term.buf, &bounds);
   double txtx = inputx + config->font.size;
   double txty = inputy + inputh / 2 + (bounds.ascent - bounds.descent) / 2;
   if (term.len) {
