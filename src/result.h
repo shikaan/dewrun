@@ -28,5 +28,8 @@ typedef enum {
   ERR_UI_TOO_MANY_FONTS,
   ERR_UI_FONT,
 
+  ERR_RUN,
+  ERR_RUN_LIST,
+
   RESULTS
 } result_t;

@@ -164,19 +164,19 @@ protocols/wlr-layer-shell-unstable-v1.o: CFLAGS := -O2 $(DISTRO_CFLAGS)
 protocols/wlr-layer-shell-unstable-v1.o: protocols/wlr-layer-shell-unstable-v1.h \
 	protocols/wlr-layer-shell-unstable-v1.c
 
-src/cli:
 main.o: protocols/wlr-layer-shell-unstable-v1.h
 src/ui.o: src/ctx.o src/log.o
 src/ctx.o: src/log.o
 src/shell.o: src/log.o src/ctx.o src/timer.o \
 	protocols/wlr-layer-shell-unstable-v1.h
 src/config.o: src/log.o
+src/run.o: src/log.o
 
 main: CFLAGS += $(DEPS_CFLAGS) \
 	-isystem . -DVERSION='"$(VERSION)"' -DSHA='"$(SHA)"'
 main: LDLIBS += $(DEPS_LIBS)
 main: main.o protocols/wlr-layer-shell-unstable-v1.o \
 	protocols/xdg-shell-protocol.o src/log.o src/ctx.o src/shell.o src/timer.o \
-	src/ui.o src/cli.o src/config.o src/fuzzy.o
+	src/ui.o src/cli.o src/config.o src/fuzzy.o src/run.o
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 

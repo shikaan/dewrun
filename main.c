@@ -8,6 +8,7 @@
 #include "src/shell.h"
 #include "src/ui.h"
 #include <assert.h>
+#include <src/run.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -18,14 +19,7 @@
 static ui_font_t *text = NULL;
 static fuz_output_t *output = NULL;
 static Buffer(char, 1024) term = {0};
-
-/// throwaway
-static literal_t in_buf[] = {
-    {"foot", 5},
-    {"dewsesh", 8},
-    {"dewlock", 8},
-};
-static literals_t inputs = {in_buf, 3};
+static literals_t *list = NULL;
 
 /////////////////////////
 static config_t *config = NULL;
@@ -43,7 +37,7 @@ bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
       term.buf[term.len] = 0;
     }
 
-    fuz_find(ToSlice(literal_t, term), &inputs, &output);
+    fuz_find(ToSlice(literal_t, term), list, &output);
 
     if (key == SHL_KEY_CANCEL) {
       exit(0);
@@ -81,7 +75,7 @@ void handle_draw(uint32_t w, uint32_t h, ctx_t **ctx) {
   double resultw = inputw;
   double resulth = inputh;
   double resultx = inputx;
-  double resultybase = inputy + inputh; 
+  double resultybase = inputy + inputh;
   if (output) {
     double restxtx = resultx + config->font.size;
     for (size_t i = 0; i < output->len; i++) {
@@ -152,8 +146,8 @@ int main(int argc, char *const *argv) {
 
   ui_font_family(config->font.family, &text);
 
-  // warm up the fuzzy results
-  fuz_find(ToSlice(literal_t, term), &inputs, &output);
+  run_list(&list);
+  fuz_find(ToSlice(literal_t, term), list, &output);
 
   return shl_run() == OK ? 0 : 1;
 }
