@@ -12,6 +12,7 @@ static bool match(literal_t term, const char *input) {
     current = strchr(current, term.buf[i]);
     if (current == NULL)
       return false;
+    current++;
   }
   return true;
 }
