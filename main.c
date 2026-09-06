@@ -58,7 +58,7 @@ void handle_draw(uint32_t w, uint32_t h, ctx_t **ctx) {
   if (ctx_get(w, h, ctx) != OK)
     return;
 
-  ui_start_frame(*ctx, 0x0000000);
+  ui_start_frame(*ctx, 0x0000044);
 
   double inputw = config->font.size * 40;
   double inputh = config->font.size * 4;
@@ -77,6 +77,22 @@ void handle_draw(uint32_t w, uint32_t h, ctx_t **ctx) {
 
   ui_txt_bounds_t bounds;
   ui_txt_init(opts, term.buf, &bounds);
+
+  double resultw = inputw;
+  double resulth = inputh;
+  double resultx = inputx;
+  double resultybase = inputy + inputh; 
+  if (output) {
+    double restxtx = resultx + config->font.size;
+    for (size_t i = 0; i < output->len; i++) {
+      double resulty = resultybase + resulth * (double)i;
+      double restxty =
+          resulty + resulth / 2 + (bounds.ascent - bounds.descent) / 2;
+      ui_rect(inputx, resulty, resultw, resulth, 0x000000ff);
+      opts.color = 0xffffff99;
+      ui_txt(opts, restxtx, restxty, output->buf[i].buf);
+    }
+  }
 
   double txtx = inputx + config->font.size;
   double txty = inputy + inputh / 2 + (bounds.ascent - bounds.descent) / 2;
@@ -133,5 +149,9 @@ int main(int argc, char *const *argv) {
   assert(shl && "shl must be non-null");
 
   ui_font_family(config->font.family, &text);
+
+  // warm up the fuzzy results
+  fuz_find(ToSlice(literal_t, term), &inputs, &output);
+
   return shl_run() == OK ? 0 : 1;
 }
