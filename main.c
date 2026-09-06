@@ -1,6 +1,8 @@
+#include "src/array.h"
 #include "src/cli.h"
 #include "src/config.h"
 #include "src/ctx.h"
+#include "src/fuzzy.h"
 #include "src/log.h"
 #include "src/result.h"
 #include "src/shell.h"
@@ -10,37 +12,44 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /////////////////////// Application state
-typedef struct {
-  char buf[1024];
-  size_t len;
-} input_t;
+static ui_font_t *text = NULL;
+static fuz_output_t *output = NULL;
+static Buffer(char, 1024) term = {0};
 
-ui_font_t *text = NULL;
-
-static input_t input = {0};
+/// throwaway
+static literal_t in_buf[] = {
+    {"foot", 5},
+    {"dewsesh", 8},
+    {"dewlock", 8},
+};
+static literals_t inputs = {in_buf, 3};
 
 /////////////////////////
 static config_t *config = NULL;
 
 bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
 #define min(a, b) (a < b ? a : b)
-  (void)key;
-  (void)len;
   if (evt == SHL_KBD_EVENT_KEYDOWN) {
     if (key == SHL_KEY_BUFFER) {
-      snprintf(input.buf + input.len, sizeof(input.buf), "%s", buf);
-      input.len = min(input.len + len, sizeof(input.buf));
+      snprintf(term.buf + term.len, sizeof(term.buf), "%s", buf);
+      term.len = min(term.len + len, sizeof(term.buf));
     }
+
     if (key == SHL_KEY_BACKSPACE) {
-      input.len = input.len == 0 ? 0 : input.len - 1;
-      input.buf[input.len] = 0;
+      term.len = term.len == 0 ? 0 : term.len - 1;
+      term.buf[term.len] = 0;
     }
+
+    fuz_find(ToSlice(literal_t, term), &inputs, &output);
+
     if (key == SHL_KEY_CANCEL) {
       exit(0);
     }
   }
+
   return true;
 #undef min
 }
@@ -67,11 +76,13 @@ void handle_draw(uint32_t w, uint32_t h, ctx_t **ctx) {
   };
 
   ui_txt_bounds_t bounds;
-  ui_txt_init(opts, input.buf, &bounds);
+  ui_txt_init(opts, term.buf, &bounds);
 
   double txtx = inputx + config->font.size;
   double txty = inputy + inputh / 2 + (bounds.ascent - bounds.descent) / 2;
-  ui_txt_commit(opts, txtx, txty, &bounds, input.buf);
+  if (term.len) {
+    ui_txt_commit(opts, txtx, txty, &bounds, term.buf);
+  }
 
   double cursorx = txtx + bounds.x_advance + (double)config->font.size / 4;
   double cursorh = bounds.ascent + bounds.descent;

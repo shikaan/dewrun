@@ -176,7 +176,7 @@ main: CFLAGS += $(DEPS_CFLAGS) \
 	-isystem . -DVERSION='"$(VERSION)"' -DSHA='"$(SHA)"'
 main: LDLIBS += $(DEPS_LIBS)
 main: main.o protocols/wlr-layer-shell-unstable-v1.o \
-	protocols/xdg-shell-protocol.o src/log.o \
-	src/ctx.o src/shell.o src/timer.o src/ui.o src/cli.o src/config.o
+	protocols/xdg-shell-protocol.o src/log.o src/ctx.o src/shell.o src/timer.o \
+	src/ui.o src/cli.o src/config.o src/fuzzy.o
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
