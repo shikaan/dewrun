@@ -15,13 +15,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-/////////////////////// Application state
 static ui_font_t *text = NULL;
 static fuz_output_t *output = NULL;
 static Buffer(char, 1024) term = {0};
 static literals_t *list = NULL;
-
-/////////////////////////
 static config_t *config = NULL;
 
 bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
@@ -146,7 +143,8 @@ int main(int argc, char *const *argv) {
 
   ui_font_family(config->font.family, &text);
 
-  run_list(&list);
+  // TODO: this list leaks memory. Should be cleaned up before closing.
+  run_init(&list);
   fuz_find(ToSlice(literal_t, term), list, &output);
 
   return shl_run() == OK ? 0 : 1;

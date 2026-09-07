@@ -17,11 +17,11 @@ static int cmp(const void *a, const void *b) {
 
   if (s->len == 0 || t->len == 0)
     return (s->len == 0) - (t->len == 0);
-  
+
   return strcmp(s->buf, t->buf);
 }
 
-result_t run_list(literals_t **list) {
+result_t run_init(literals_t **list) {
   result_t result = OK;
   char *path = getenv("PATH");
 
