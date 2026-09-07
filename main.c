@@ -8,6 +8,7 @@
 #include "src/shell.h"
 #include "src/ui.h"
 #include <assert.h>
+#include <src/color.h>
 #include <src/run.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -19,25 +20,40 @@ static ui_font_t *text = NULL;
 static fuz_output_t *output = NULL;
 static Buffer(char, 1024) term = {0};
 static literals_t *list = NULL;
+static size_t selected = 0;
 static config_t *config = NULL;
 
 bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
 #define min(a, b) (a < b ? a : b)
   if (evt == SHL_KBD_EVENT_KEYDOWN) {
-    if (key == SHL_KEY_BUFFER) {
+    switch (key) {
+    case SHL_KEY_BUFFER:
       snprintf(term.buf + term.len, sizeof(term.buf), "%s", buf);
       term.len = min(term.len + len, sizeof(term.buf));
-    }
-
-    if (key == SHL_KEY_BACKSPACE) {
+      fuz_find(ToSlice(literal_t, term), list, &output);
+      selected = 0;
+      break;
+    case SHL_KEY_BACKSPACE:
       term.len = term.len == 0 ? 0 : term.len - 1;
       term.buf[term.len] = 0;
-    }
-
-    fuz_find(ToSlice(literal_t, term), list, &output);
-
-    if (key == SHL_KEY_CANCEL) {
+      fuz_find(ToSlice(literal_t, term), list, &output);
+      break;
+    case SHL_KEY_DOWN:
+      if (output->len)
+        selected = (selected + 1) % output->len;
+      break;
+    case SHL_KEY_UP:
+      if (output->len)
+        selected = (selected - 1 + output->len) % output->len;
+      break;
+    case SHL_KEY_CANCEL:
       exit(0);
+    case SHL_KEY_LEFT:
+    case SHL_KEY_RIGHT:
+    case SHL_KEY_CONFIRM:
+    case SHL_KEY_UNKNOWN:
+    default:
+      return false;
     }
   }
 
@@ -60,7 +76,7 @@ void handle_draw(uint32_t w, uint32_t h, ctx_t **ctx) {
 
   ui_txt_t opts = {
       .font = text,
-      .size = config->font.size * 1.75,
+      .size = config->font.size * 1.5,
       .align = UI_TXT_ALIGN_LEFT,
       .color = 0xffffffff,
       .weight = UI_TXT_WEIGHT_NORMAL,
@@ -79,7 +95,9 @@ void handle_draw(uint32_t w, uint32_t h, ctx_t **ctx) {
       double resulty = resultybase + resulth * (double)i;
       double restxty =
           resulty + resulth / 2 + (bounds.ascent - bounds.descent) / 2;
-      ui_rect(inputx, resulty, resultw, resulth, 0x000000ff);
+
+      color_t background = i == selected ? 0x82a2beff : 0x000000ff;
+      ui_rect(inputx, resulty, resultw, resulth, background);
       opts.color = 0xffffff99;
       ui_txt(opts, restxtx, restxty, output->buf[i].buf);
     }

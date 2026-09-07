@@ -128,6 +128,7 @@ bool set_has(const set_t *self, string_t key) {
 void set_deinit(set_t *self) {
   if (!self)
     return;
+
   for (size_t i = 0; i < self->cap; i++) {
     if (self->buf[i].len > 0) {
       free(self->buf[i].buf);

@@ -83,6 +83,5 @@ result_t run_init(literals_t **list) {
 
   *list = &results;
 done:
-  set_deinit(&paths);
   return result;
 }
