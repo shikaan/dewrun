@@ -2,9 +2,10 @@
 #include "array.h"
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
-static fuz_output_t outputs = {0};
+static literals_t outputs = {0};
 
 static bool match(literal_t term, const char *input) {
   const char *current = input;
@@ -17,10 +18,10 @@ static bool match(literal_t term, const char *input) {
   return true;
 }
 
-result_t fuz_find(literal_t term, literals_t *in, fuz_output_t **out) {
-  memset(outputs.buf, 0, sizeof(outputs.buf));
+result_t fuz_find(literal_t term, literals_t *in, literals_t **out) {
+  outputs.buf = realloc(outputs.buf, in->len * sizeof(outputs.buf[0]));
   outputs.len = 0;
-  for (size_t i = 0; i < in->len && outputs.len < ArraySize(outputs.buf); i++) {
+  for (size_t i = 0; i < in->len; i++) {
     if (match(term, in->buf[i].buf)) {
       outputs.buf[outputs.len] = in->buf[i];
       outputs.len++;

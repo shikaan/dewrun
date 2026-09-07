@@ -6,8 +6,8 @@
 #include "src/log.h"
 #include "src/result.h"
 #include "src/shell.h"
-#include "src/ui.h"
 #include "src/spawn.h"
+#include "src/ui.h"
 #include <assert.h>
 #include <src/color.h>
 #include <src/run.h>
@@ -18,11 +18,16 @@
 #include <string.h>
 
 static ui_font_t *text = NULL;
-static fuz_output_t *output = NULL;
+
+static literals_t *results = NULL;
 static Buffer(char, 1024) term = {0};
-static literals_t *list = NULL;
-static size_t selected = 0;
+static literals_t *input_list = NULL;
+static size_t selected_idx = 0;
+static size_t offset = 0;
 static config_t *config = NULL;
+
+// TODO: should this be configuration?
+enum { MAX_FILTERED = 5 };
 
 bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
 #define min(a, b) (a < b ? a : b)
@@ -31,26 +36,30 @@ bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
     case SHL_KEY_BUFFER:
       snprintf(term.buf + term.len, sizeof(term.buf), "%s", buf);
       term.len = min(term.len + len, sizeof(term.buf));
-      fuz_find(ToSlice(literal_t, term), list, &output);
-      selected = 0;
+      fuz_find(ToSlice(literal_t, term), input_list, &results);
+      selected_idx = 0;
+      offset = 0;
       break;
     case SHL_KEY_BACKSPACE:
       term.len = term.len == 0 ? 0 : term.len - 1;
       term.buf[term.len] = 0;
-      fuz_find(ToSlice(literal_t, term), list, &output);
+      fuz_find(ToSlice(literal_t, term), input_list, &results);
+      selected_idx = 0;
+      offset = 0;
       break;
     case SHL_KEY_DOWN:
-      if (output->len)
-        selected = (selected + 1) % output->len;
+      selected_idx += selected_idx < results->len - 1;
+      offset += selected_idx != results->len - 1 &&
+                selected_idx - offset == MAX_FILTERED - 1;
       break;
     case SHL_KEY_UP:
-      if (output->len)
-        selected = (selected - 1 + output->len) % output->len;
+      selected_idx -= selected_idx > 0;
+      offset -= offset > 0 && selected_idx - offset == 0;
       break;
     case SHL_KEY_CANCEL:
       exit(0);
     case SHL_KEY_CONFIRM:
-      if (spw_launch(output->buf[selected].buf) == OK) {
+      if (spw_launch(results->buf[selected_idx].buf) == OK) {
         exit(0);
       }
       break;
@@ -94,17 +103,18 @@ void handle_draw(uint32_t w, uint32_t h, ctx_t **ctx) {
   double resulth = inputh;
   double resultx = inputx;
   double resultybase = inputy + inputh;
-  if (output) {
+  if (results) {
     double restxtx = resultx + config->font.size;
-    for (size_t i = 0; i < output->len; i++) {
+    size_t nresults = results->len < MAX_FILTERED ? results->len : 5;
+    for (size_t i = 0; i < nresults; i++) {
       double resulty = resultybase + resulth * (double)i;
       double restxty =
           resulty + resulth / 2 + (bounds.ascent - bounds.descent) / 2;
 
-      color_t background = i == selected ? 0x82a2beff : 0x000000ff;
+      color_t background = i + offset == selected_idx ? 0x82a2beff : 0x000000ff;
       ui_rect(inputx, resulty, resultw, resulth, background);
       opts.color = 0xffffff99;
-      ui_txt(opts, restxtx, restxty, output->buf[i].buf);
+      ui_txt(opts, restxtx, restxty, results->buf[i + offset].buf);
     }
   }
 
@@ -167,8 +177,8 @@ int main(int argc, char *const *argv) {
   ui_font_family(config->font.family, &text);
 
   // TODO: this list leaks memory. Should be cleaned up before closing.
-  run_init(&list);
-  fuz_find(ToSlice(literal_t, term), list, &output);
+  run_init(&input_list);
+  fuz_find(ToSlice(literal_t, term), input_list, &results);
 
   return shl_run() == OK ? 0 : 1;
 }
