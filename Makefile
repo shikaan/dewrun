@@ -171,12 +171,13 @@ src/shell.o: src/log.o src/ctx.o src/timer.o \
 	protocols/wlr-layer-shell-unstable-v1.h
 src/config.o: src/log.o
 src/run.o: src/log.o
+src/spawn.o: src/log.o
 
 main: CFLAGS += $(DEPS_CFLAGS) \
 	-isystem . -DVERSION='"$(VERSION)"' -DSHA='"$(SHA)"'
 main: LDLIBS += $(DEPS_LIBS)
 main: main.o protocols/wlr-layer-shell-unstable-v1.o \
 	protocols/xdg-shell-protocol.o src/log.o src/ctx.o src/shell.o src/timer.o \
-	src/ui.o src/cli.o src/config.o src/fuzzy.o src/run.o src/hashset.o
+	src/ui.o src/cli.o src/config.o src/fuzzy.o src/spawn.o src/run.o src/hashset.o
 	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
 

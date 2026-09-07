@@ -7,6 +7,7 @@
 #include "src/result.h"
 #include "src/shell.h"
 #include "src/ui.h"
+#include "src/spawn.h"
 #include <assert.h>
 #include <src/color.h>
 #include <src/run.h>
@@ -48,9 +49,13 @@ bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
       break;
     case SHL_KEY_CANCEL:
       exit(0);
+    case SHL_KEY_CONFIRM:
+      if (spw_launch(output->buf[selected].buf) == OK) {
+        exit(0);
+      }
+      break;
     case SHL_KEY_LEFT:
     case SHL_KEY_RIGHT:
-    case SHL_KEY_CONFIRM:
     case SHL_KEY_UNKNOWN:
     default:
       return false;

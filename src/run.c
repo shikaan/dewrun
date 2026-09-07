@@ -23,13 +23,15 @@ static int cmp(const void *a, const void *b) {
 
 result_t run_init(literals_t **list) {
   result_t result = OK;
-  char *path = getenv("PATH");
+  const char *path_env = getenv("PATH");
 
-  if (!path) {
+  if (!path_env) {
     log_error("cannot read PATH env variable", NULL);
     return ERR_RUN_LIST;
   }
 
+  // touching directly the path env breaks the environment
+  char *pathstr = strdup(path_env);
   set_t items = {0};
   set_t paths = {0};
 
@@ -41,24 +43,30 @@ result_t run_init(literals_t **list) {
   if (result != OK)
     goto done;
 
-  while (path) {
-    char *separator = strchr(path, ':');
+  char *cursor = pathstr;
+  while (cursor && *cursor) {
+    char *entry_path = cursor;
+    char *separator = strchr(cursor, ':');
 
     if (separator) {
       *separator = 0;
+      cursor = separator + 1;
+    } else {
+      cursor = NULL;
     }
 
-    string_t path_key = {path, strlen(path)};
+    string_t path = {entry_path, strlen(entry_path)};
 
-    if (set_has(&paths, path_key))
+    if (set_has(&paths, path))
       continue;
-    set_add(&paths, path_key);
+    set_add(&paths, path);
 
-    log_debug("listing files in %s", path);
-    DIR *dir = opendir(path);
+    log_debug("listing files in %s", path.buf);
+    DIR *dir = opendir(path.buf);
     if (!dir) {
-      log_error("cannot open path %s: %s", path, strerror(errno));
-      return ERR_RUN_LIST;
+      log_warn("cannot open path %s: %s; skipping", path.buf,
+               strerror(errno));
+      continue;
     }
 
     struct dirent *entry;
@@ -72,9 +80,6 @@ result_t run_init(literals_t **list) {
         }
       }
     }
-    if (!separator)
-      break;
-    path = separator + 1;
   }
 
   qsort(items.buf, items.cap, sizeof(string_t), &cmp);
@@ -83,5 +88,6 @@ result_t run_init(literals_t **list) {
 
   *list = &results;
 done:
+  free(pathstr);
   return result;
 }
