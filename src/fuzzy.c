@@ -32,7 +32,7 @@ static size_t match(literal_t term, const char *input) {
 }
 
 result_t fuz_find(literal_t term, literals_t *in, literals_t **out) {
-  assert(term.len >= TERM_MAX_LEN && "search term too long");
+  assert(term.len < TERM_MAX_LEN && "search term too long");
   assert(in && "input list should be non-null");
   assert(out && "output list reference should be non-null");
 
