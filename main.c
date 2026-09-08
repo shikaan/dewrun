@@ -25,29 +25,67 @@ static literals_t *input_list = NULL;
 static size_t selected_idx = 0;
 static size_t offset = 0;
 static config_t *config = NULL;
+static size_t cursor = 0;
 
 // TODO: should this be configuration?
 enum { MAX_FILTERED = 5 };
 
+static size_t utf8_cursor_retreat(const char *s, size_t i) {
+  if (i == 0)
+    return 0;
+
+  i--;
+  while (i > 0 && ((unsigned char)s[i] & 0xc0) == 0x80)
+    i--;
+  return i;
+}
+
+static size_t utf8_cursor_advance(const char *s, size_t len, size_t i) {
+  if (i >= len)
+    return len;
+
+  i++;
+  while (i < len && ((unsigned char)s[i] & 0xc0) == 0x80)
+    i++;
+  return i;
+}
+
 bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
-#define min(a, b) (a < b ? a : b)
   if (evt == SHL_KBD_EVENT_KEYDOWN) {
     switch (key) {
-    case SHL_KEY_BUFFER:
-      snprintf(term.buf + term.len, sizeof(term.buf), "%s", buf);
-      term.len = min(term.len + len, sizeof(term.buf));
-      fuz_find(ToSlice(literal_t, term), input_list, &results);
-      selected_idx = 0;
-      offset = 0;
-      break;
-    case SHL_KEY_BACKSPACE:
-      term.len = term.len == 0 ? 0 : term.len - 1;
+    case SHL_KEY_BUFFER: {
+      if (len > ArraySize(term.buf) - 1 - term.len)
+        break;
+
+      memmove(term.buf + cursor + len, term.buf + cursor, term.len - cursor);
+      memcpy(term.buf + cursor, buf, len);
+      term.len += len;
       term.buf[term.len] = 0;
+      cursor += len;
+
       fuz_find(ToSlice(literal_t, term), input_list, &results);
       selected_idx = 0;
       offset = 0;
       break;
+    }
+    case SHL_KEY_BACKSPACE: {
+      if (!cursor)
+        break;
+
+      size_t prev = utf8_cursor_retreat(term.buf, cursor);
+      memmove(term.buf + prev, term.buf + cursor, term.len - cursor);
+      term.len -= cursor - prev;
+      term.buf[term.len] = 0;
+      cursor = prev;
+
+      fuz_find(ToSlice(literal_t, term), input_list, &results);
+      selected_idx = 0;
+      offset = 0;
+      break;
+    }
     case SHL_KEY_DOWN:
+      if (!results->len)
+        break;
       selected_idx += selected_idx < results->len - 1;
       offset += selected_idx != results->len - 1 &&
                 selected_idx - offset == MAX_FILTERED - 1;
@@ -56,15 +94,22 @@ bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
       selected_idx -= selected_idx > 0;
       offset -= offset > 0 && selected_idx - offset == 0;
       break;
+    case SHL_KEY_LEFT:
+      cursor = utf8_cursor_retreat(term.buf, cursor);
+      break;
+    case SHL_KEY_RIGHT:
+      cursor = utf8_cursor_advance(term.buf, term.len, cursor);
+      break;
     case SHL_KEY_CANCEL:
       exit(0);
     case SHL_KEY_CONFIRM:
+      if (results->len == 0)
+        break;
       if (spw_launch(results->buf[selected_idx].buf) == OK) {
         exit(0);
       }
+      // TODO: error handling
       break;
-    case SHL_KEY_LEFT:
-    case SHL_KEY_RIGHT:
     case SHL_KEY_UNKNOWN:
     default:
       return false;
@@ -72,7 +117,6 @@ bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
   }
 
   return true;
-#undef min
 }
 
 void handle_draw(uint32_t w, uint32_t h, ctx_t **ctx) {
@@ -126,11 +170,15 @@ void handle_draw(uint32_t w, uint32_t h, ctx_t **ctx) {
     ui_txt_commit(opts, txtx, txty, &bounds, term.buf);
   }
 
-  double cursorx = txtx + bounds.x_advance + (double)config->font.size / 4;
+  char backup = term.buf[cursor];
+  term.buf[cursor] = 0;
+  ui_txt_init(opts, term.buf, &bounds);
+  double cursorx = txtx + bounds.x_advance;
   double cursorh = bounds.ascent + bounds.descent;
   double cursorw = 2;
   double cursory = txty - bounds.ascent;
   ui_rect(cursorx, cursory, cursorw, cursorh, 0xffffffff);
+  term.buf[cursor] = backup;
 }
 
 bool handle_pointer(shl_ptr_event_t evt, shl_ptr_btn_t btn, double x,
