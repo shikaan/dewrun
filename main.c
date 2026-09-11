@@ -83,6 +83,20 @@ bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
       offset = 0;
       break;
     }
+    case SHL_KEY_DELETE: {
+      if (cursor == term.len)
+        break;
+
+      size_t next = utf8_cursor_advance(term.buf, term.len, cursor);
+      memmove(term.buf + cursor, term.buf + next, term.len - cursor);
+      term.len -= next - cursor;
+      term.buf[term.len] = 0;
+
+      fuz_find(ToSlice(literal_t, term), input_list, &results);
+      selected_idx = 0;
+      offset = 0;
+      break;
+    }
     case SHL_KEY_DOWN:
       if (!results->len)
         break;
