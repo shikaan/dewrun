@@ -51,6 +51,18 @@ static void keyboard_enter(void *data, struct wl_keyboard *wl_keyboard,
                            struct wl_array *keys);
 static void keyboard_leave(void *data, struct wl_keyboard *wl_keyboard,
                            uint32_t serial, struct wl_surface *surface);
+static bool keyboard_key_is_printable(uint32_t codepoint) {
+  // C0 controls and DEL: Ctrl+key combos, Tab, Esc, Return, Backspace, ...
+  if (codepoint < 0x20 || codepoint == 0x7f) {
+    return false;
+  }
+  // C1 controls
+  if (codepoint >= 0x80 && codepoint <= 0x9f) {
+    return false;
+  }
+  return true;
+}
+
 static void keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
                          uint32_t serial, uint32_t time, uint32_t key,
                          uint32_t _key_state);
@@ -340,6 +352,11 @@ static void keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
     keyboard_key_payload.key = SHL_KEY_DELETE;
     break;
   default: {
+    uint32_t codepoint = xkb_state_key_get_utf32(xkb_state, key + 8);
+    if (!keyboard_key_is_printable(codepoint)) {
+      break;
+    }
+
     int len =
         xkb_state_key_get_utf8(xkb_state, key + 8, keyboard_key_payload.buf,
                                sizeof(keyboard_key_payload.buf));
