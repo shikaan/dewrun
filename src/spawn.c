@@ -3,6 +3,7 @@
 #include "result.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -61,4 +62,19 @@ result_t spw_launch(const char *command) {
   }
 
   return OK;
+}
+
+result_t spw_launch_term(const char *command) {
+  char fullcmd[1024];
+  result_t res;
+
+  snprintf(fullcmd, sizeof(fullcmd), "x-terminal-emulator -e %s", command);
+  res = spw_launch(fullcmd);
+
+  if (res == OK)
+    return res;
+
+  // if x-terminal-emulator fails, try with xdg
+  snprintf(fullcmd, sizeof(fullcmd), "xdg-terminal-exec %s", command);
+  return spw_launch(fullcmd);
 }

@@ -124,6 +124,14 @@ bool handle_key(shl_kbd_event_t evt, shl_key_t key, char *buf, size_t len) {
       }
       // TODO: error handling
       break;
+    case SHL_KEY_CONFIRM_SPECIAL:
+      if (results->len == 0)
+        break;
+      if (spw_launch_term(results->buf[selected_idx].buf) == OK) {
+        exit(0);
+      }
+      // TODO: error handling
+      break;
     case SHL_KEY_UNKNOWN:
     default:
       return false;

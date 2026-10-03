@@ -342,9 +342,13 @@ static void keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
     keyboard_key_payload.key = SHL_KEY_RIGHT;
     break;
   case XKB_KEY_Return:
-  case XKB_KEY_KP_Enter:
-    keyboard_key_payload.key = SHL_KEY_CONFIRM;
+  case XKB_KEY_KP_Enter: {
+    bool shift = xkb_state_mod_name_is_active(xkb_state, XKB_MOD_NAME_SHIFT,
+                                              XKB_STATE_MODS_EFFECTIVE) > 0;
+    keyboard_key_payload.key =
+        shift ? SHL_KEY_CONFIRM_SPECIAL : SHL_KEY_CONFIRM;
     break;
+  }
   case XKB_KEY_BackSpace:
     keyboard_key_payload.key = SHL_KEY_BACKSPACE;
     break;
